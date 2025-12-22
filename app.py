@@ -11,15 +11,22 @@ def calculate_ats(resume_text, jd_text):
     resume_words = set(re.findall(r'\w+', resume_text))
     jd_words = set(re.findall(r'\w+', jd_text))
 
-    matched = resume_words.intersection(jd_words)
-    missing = jd_words - resume_words
+    important_words = {
+        word for word in jd_words
+        if len(word) > 4 and word.isalpha()
+    }
 
-    if len(jd_words) == 0:
+    matched = resume_words.intersection(important_words)
+    missing = important_words - resume_words
+
+    if len(important_words) == 0:
         return 0, []
 
-    raw_score = (len(matched) / len(jd_words)) * 100
-    ats_score = min(int(raw_score), 85)   # cap to avoid 100%
+    raw_score = (len(matched) / len(important_words)) * 100
+    ats_score = min(int(raw_score), 85)
+
     return ats_score, list(missing)[:8]
+
 
 
 # =============================
@@ -141,8 +148,8 @@ if st.button("Submit", key="submit_btn"):
         st.subheader("ATS Analysis Result")
         st.metric("ATS Match Percentage", f"{ats_score}%")
 
-        st.subheader("Missing Keywords")
-        st.write(missing_keywords)
+        #st.subheader("Missing Keywords")
+        #st.write(missing_keywords)
 
         st.subheader("Profile Summary")
         st.write(
