@@ -2,11 +2,30 @@ import streamlit as st
 from streamlit_extras.add_vertical_space import add_vertical_space
 import PyPDF2 as pdf
 import json
+import re
+
+def calculate_ats(resume_text, jd_text):
+    resume_text = resume_text.lower()
+    jd_text = jd_text.lower()
+
+    resume_words = set(re.findall(r'\w+', resume_text))
+    jd_words = set(re.findall(r'\w+', jd_text))
+
+    matched = resume_words.intersection(jd_words)
+    missing = jd_words - resume_words
+
+    if len(jd_words) == 0:
+        return 0, []
+
+    raw_score = (len(matched) / len(jd_words)) * 100
+    ats_score = min(int(raw_score), 85)   # cap to avoid 100%
+    return ats_score, list(missing)[:8]
+
 
 # =============================
-# MOCK MODE (NO API REQUIRED)
+# MOCK MODE 
 # =============================
-USE_MOCK = True   # 🔥 Keep this TRUE (no payment)
+USE_MOCK = False   
 
 def get_gemini_response(prompt):
     if USE_MOCK:
@@ -20,7 +39,7 @@ def get_gemini_response(prompt):
     else:
         # Future real API integration
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="Gemini Pro",
             contents=prompt
         )
         return response.text
@@ -46,13 +65,19 @@ def resume_improvement_agent():
         "Tailor resume summary based on job description"
     ]
 
-def explainable_score():
+def explainable_score_from_ats(ats_score):
+    skills = int(ats_score * 0.5)
+    experience = int(ats_score * 0.25)
+    projects = int(ats_score * 0.15)
+    education = ats_score - (skills + experience + projects)
+
     return {
-        "Skills Match": "60%",
-        "Experience Match": "15%",
-        "Education Match": "7%",
-        "Projects Match": "10%"
+        "Skills Match": f"{skills}%",
+        "Experience Match": f"{experience}%",
+        "Projects Match": f"{projects}%",
+        "Education Match": f"{education}%"
     }
+
 
 
 # =============================
@@ -111,29 +136,24 @@ if st.button("Submit", key="submit_btn"):
         final_prompt = input_prompt.format(text=resume_text, jd=jd)
 
         # ATS Analysis
-        ats_result = get_gemini_response(final_prompt)
+        ats_score, missing_keywords = calculate_ats(resume_text, jd)
 
         st.subheader("ATS Analysis Result")
-        st.write(ats_result)
+        st.metric("ATS Match Percentage", f"{ats_score}%")
 
-        st.subheader("Explainable AI – Score Breakdown")
+        st.subheader("Missing Keywords")
+        st.write(missing_keywords)
 
-        st.progress(0.60)
-        st.write("Skills Match – 60%")
-
-        st.progress(0.15)
-        st.write("Experience Match – 15%")
-
-        st.progress(0.07)
-        st.write("Education Match – 7%")
-
-        st.progress(0.10)
-        st.write("Projects Match – 10%")
-
+        st.subheader("Profile Summary")
+        st.write(
+    f"The resume matches approximately {ats_score}% of the job description. "
+    "Improvement is possible by adding missing technical and domain-specific keywords."
+)
 
         # Explainable AI
         st.subheader("Explainable AI – Score Breakdown")
-        st.json(explainable_score())
+        st.json(explainable_score_from_ats(ats_score))
+
 
         # Resume Improvement Agent
         st.subheader("Resume Improvement Suggestions (Agentic AI)")
@@ -141,17 +161,6 @@ if st.button("Submit", key="submit_btn"):
             st.write("•", tip)
         #else:
             #st.warning("Please upload resume and paste job description.")
-def extract_keywords(text):
-    keywords = ["Python", "AI", "Machine Learning", "AWS", "Docker", "SQL"]
-    return [k for k in keywords if k.lower() in text.lower()]
 
-def resume_strength(score):
-    score = int(score.replace('%',''))
-    if score >= 80:
-        return "🔥 Strong Resume"
-    elif score >= 60:
-        return "⚡ Moderate Resume"
-    else:
-        return "⚠ Needs Improvement"
 
 
